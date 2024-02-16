@@ -1,0 +1,200 @@
+
+
+
+<!DOCTYPE html>
+<html>
+	<head>
+		
+		<title>Local Authority Districts Map</title>
+
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+		<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="  crossorigin=""/>
+		<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="   crossorigin=""></script>
+		<script src="lad.js"></script>
+		<style>
+			html, body, #map {
+				height: 100%;
+				width: 100%;
+				margin: 0;
+			}
+			.leaflet-popup-content-wrapper {
+				padding: 0px;
+				text-align: left;
+				pointer-events: all;
+			}
+			.leaflet-popup-content {
+				padding: 0px 0px 0px;
+				margin: 0;
+				width: 20em !important;
+			}
+			.leaflet-popup-content p {
+				margin: 0 !important;
+				text-align: center;
+			}
+			.leaflet-container a.leaflet-popup-close-button {
+				color: #ffffff;
+				font-weight: bold;
+			}
+			.popupBox {
+				font-family: helvetica;
+				display: inline-block;
+				margin-bottom: 4px;
+				width: 20em;
+			}
+			.titleBox {
+				background-color: #123c74;
+				width: 100%;
+				text-align: center;
+				color: #ffffff;
+				text-transform: uppercase;
+			}
+			.titleBox span {
+				padding: 6px;
+    			display: block;
+			}
+			.iw-details {
+				color: rgba(0,0,0,.87);
+				font-size: 1em;
+				padding: 5px;
+			}	
+			.popup-row {
+				padding: 4px 0px 0px 0px;
+				text-align: justify;
+			}
+			.popup-row[title=""] {  display: none !important;  }
+			.popup-row[title=" "] {  display: none !important;  }
+			.popup-row[title="null"] {  display: none !important;  }
+			.popup-row[title="undefined"] {  display: none !important;  }
+			@media only screen and (max-width: 768px) {
+				.iw-details {font-size: 0.8em;}
+				.titleBox {text-align: center;font-size: 0.9em;}
+				.leaflet-popup-content {width: 18em !important;}	
+				.popupBox {width: 18em !important;}
+			}
+			@media only screen and (min-width: 1280px)  {
+				.popupBox {width: 22em !important;}
+				.leaflet-popup-content {width: 22em !important;}						
+			}				
+		</style>	
+
+	</head>
+	<body>
+
+		<div id="map" class="map"></div>
+		
+		<script>
+
+			// map bounds
+			const latLngBounds = L.latLngBounds([[49.939,-7.0476], [58.556,1.704]]);
+			
+			// main map object
+			const map = L.map('map', {
+				minZoom: 2,
+				maxZoom: 16,
+				zoomSnap: 0.25
+			});
+
+			// add basemap
+			const voyager = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+				attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+				subdomains: 'abcd',
+				maxZoom: 20
+			}).addTo(map);
+						
+			// go to map bounds
+			map.fitBounds(latLngBounds);
+			
+			// add layer with Local Authority Districts polygons
+			const lad_layer = new L.GeoJSON(lads, {
+			  style: function (feature) {
+				return {
+					weight: 0.75,
+					opacity: 1,
+					color: '#fff',
+					fillOpacity: 0.95,
+					fillColor: '#cccccc'
+				};
+			  },	
+			  onEachFeature: function (feature, layer) { 
+				layer.on('mouseover', function (e) {
+					this.setStyle({
+					'fillOpacity': 0.4,
+					});
+				});
+				layer.on('mouseout', function () {
+					this.setStyle({
+						'fillOpacity': 0.95,
+					});
+				});
+			  }
+			}).addTo(map);
+
+			const spreadsheetUrl = 'https://sheets.googleapis.com/v4/spreadsheets/1TiM5TPY8to5-j6ERM2-Z3-ojD5SM8Xl21uNM5FNy8BQ/values/Sheet1?alt=json&key=AIzaSyB8WWekaQasDvFLo1tDZ9st6YGXZpIwSjA';
+
+			// coonect do Google Sheet
+			async function getData(){
+				const response = await fetch(spreadsheetUrl);
+				const data = await response.json();
+				return data;
+			};
+
+			function doSomething(data) {
+				// parse Google Sheet
+				var obj = {};
+				var result = [];
+				var entries = data.values;
+				var headers = entries[0];
+				var cols = headers.length;
+				var row = [];
+				for (var i = 0; i < entries.length; i++) {
+					row = entries[i];
+					obj = {};
+					for (var col = 0; col < cols; col++) {
+						obj[headers[col]] = row[col];
+					};
+					result.push(obj);
+				}
+				result.shift();
+
+				if (typeof result === 'undefined' || result === null) {
+					console.log("not working, no data")
+				} else {
+
+					// get info for each state
+					function featureInfo(f) {
+						//console.log(f);
+						for (let i = 0; i < result.length; i++) {
+							let fid = f.feature.properties.id;
+							if (result[i].Id == fid) {
+								return result[i];
+							} 
+						};	
+					};	
+
+					// set popup info
+ 					lad_layer.eachLayer(function(layer) {
+
+						let info = featureInfo(layer);
+                        layer.setStyle({fillColor: info.Color}) 
+
+						const popupInfo = '<div class="popupBox">'+
+							'<div class="titleBox"><span>'  + info.Name + '</span></div>'+
+							'<div class="iw-details">'+
+								'<div class="popup-row" title="' + info.Time + '" ><b>Response Time:</b> ' + info.Time  + '</div>'+
+								'<div class="popup-row" title="' + info.Notes + '" ><b>Notes:</b> ' + info.Notes  + '</div>'+
+							'</div>'+
+						'</div>';
+
+						layer.bindPopup(popupInfo, {autoPanPadding: [50, 10]});
+					});
+				};
+			};
+
+			getData().then(doSomething);
+
+			
+		</script>
+	</body>
+</html>
